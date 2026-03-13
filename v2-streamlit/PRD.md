@@ -101,12 +101,19 @@ mcp
 # duckduckgo-search
 ```
 
-### 知识库文档（与 v1 共用）
+### 知识库文档
 
-`oneflower/` 目录：
-- `易速鲜花员工手册.pdf`
+知识库文件已复制至 `python/oneflower/`（与各 `phase-N/completed/` 共享，通过软链接引用）：
+
+- `easy速鲜花员工手册.pdf`
 - `易速鲜花运营指南.docx`
 - `花语大全.txt`
+
+> 在各 `phases/phase-N/completed/` 目录下创建软链接：
+> ```cmd
+> # Windows（管理员终端）
+> mklink /D oneflower ..\..\..\oneflower
+> ```
 
 ---
 
@@ -333,7 +340,9 @@ python/
 | 学员起点 | `python/phases/phase-N/starter/` | 骨架代码 + TODO 注释 |
 | 阶段指南 | `python/phases/phase-N/README.md` | 提示词模板 + 验收清单 |
 | 学员教科书 | `python/docs/student-textbook.md` | 概念讲解 + 操作步骤 |
-| 施工手册 | `python/docs/prompt-templates.md` | 内部用，提示词精确版 + 参考架构 |
+| 讲师指南 | `python/docs/instructor-guide.md` | 教学计划 + 常见问题处理 |
+| 施工手册 | `v2-streamlit/prompt-templates.md` | 内部用，提示词精确版 + 参考架构 |
+| 知识库 | `python/oneflower/` | 示例文档（软链接到各 phase completed/）|
 
 ---
 
