@@ -74,14 +74,15 @@
 在 aigc-chatbot/public 目录下创建 index.html、style.css、app.js，做一个聊天界面：
 
 index.html 要求：
-- 深色主题（背景 #0d1117）
-- 顶部区域：左边"AI 聊天助手"标题，右边「清空对话」按钮
+- 支持深色/浅色双主题（默认深色，背景 #0d1117）
+- 顶部区域：左边"AI 聊天助手"标题 + ☀️ 主题切换按钮，右边「清空对话」按钮
 - 中间消息区：可滚动，用于显示聊天消息
 - 底部输入区：文本输入框（支持 Enter 发送）+ 发送按钮（毛玻璃效果）
 - 底部状态栏：显示「输入 Token: X | 输出 Token: X | 累计 Token: X」
 - 引入 CDN 的 marked.js（Markdown 渲染）和 highlight.js（代码高亮）
 
 style.css 要求：
+- 深色主题（默认）和浅色主题（通过 [data-theme="light"] CSS 变量切换）
 - 用户消息：右对齐，蓝紫渐变背景（#4facfe → #00f2fe）
 - AI 消息：左对齐，深灰背景（#1e2333），有浅灰圆角边框
 - AI 消息正在输出时显示闪烁光标动画
@@ -92,17 +93,22 @@ app.js 要求：
 - 发送 POST 请求到 /api/chat，传入 messages 数组
 - 用 ReadableStream 读取 SSE 响应，逐块解析
 - AI 回复逐字追加到消息气泡中（流式效果）
+- 解析流式 delta 中的 reasoning_content 字段（DeepSeek-R1 等推理模型的思考过程），
+  用 <details>/<summary> 折叠块实时显示思考内容，正文回复单独显示
 - 解析到 { type: "usage" } 时更新页面底部 Token 统计
 - 发送时禁用发送按钮，收到回复后恢复
 - 维护对话历史（messages 数组），支持多轮对话
 - 用 marked.js 渲染最终的 AI 回复内容（Markdown 格式）
 - 清空按钮清除对话历史和界面消息
+- 主题切换：点击 ☀️/🌙 按钮切换深色/浅色，用 localStorage 记忆用户偏好
 ```
 
 ✅ **验证方式**：
 1. 刷新 http://localhost:3000，看到聊天界面
 2. 输入「你好」，看到 AI 逐字回复
 3. 底部 Token 数字更新
+4. 点击 ☀️ 按钮，界面切换为浅色主题，刷新后保持
+5. 切换到 DeepSeek-R1 模型发送消息，若返回思考过程，能看到折叠的「思考过程」块
 
 🔧 **常见问题**：
 - *界面空白*：检查 `express.static('public')` 中的路径
@@ -162,8 +168,14 @@ app.js 要求：
 ```
 在 aigc-chatbot/rag 目录下创建 loader.js：
 
-实现并导出 loadAndChunkDocuments(dirPath) 函数：
-1. 读取 dirPath 目录下所有 .txt、.md、.json、.csv 文件
+安装文档解析依赖：npm install mammoth pdf-parse
+
+实现并导出 async function loadAndChunkDocuments(dirPath) 函数：
+1. 读取 dirPath 目录下所有 .txt、.md、.json、.csv、.docx、.pdf 文件
+   - .txt/.md/.json/.csv：直接读取文本
+   - .docx：使用 mammoth 库（mammoth.extractRawText({ buffer })）提取纯文本
+   - .pdf：使用 pdf-parse 库（const result = await pdfParse(buf); content = result.text）
+   - 若 mammoth 或 pdf-parse 未安装则跳过对应文件并打印警告（不中断构建）
 2. 对每个文件内容，按空行（两个或以上换行）切分为段落
 3. 如果某段落超过 500 字，按句号/换行强制切分
 4. 相邻片段保留约 100 字的重叠（把前一片段的最后 100 字加到当前片段开头）
@@ -175,7 +187,7 @@ app.js 要求：
 ✅ **验证方式**：在项目根目录运行以下测试代码：
 ```javascript
 import { loadAndChunkDocuments } from './rag/loader.js';
-const chunks = loadAndChunkDocuments('./OneFlower/OneFlower');
+const chunks = await loadAndChunkDocuments('./OneFlower/OneFlower');
 console.log(`共 ${chunks.length} 个片段`);
 console.log(chunks[0]);
 ```
@@ -226,11 +238,23 @@ search(query, topK=3, rerankEnabled=false)：
 修改 aigc-chatbot/server.js，添加 RAG 功能：
 
 1. 新增路由 POST /api/rag/build-index：
-   - 调用 loader.js 加载 process.env.KNOWLEDGE_DIR 目录下的文档（默认 ./OneFlower/OneFlower）
+   - 路径优先级：① 通过 set-knowledge-dir 动态设置的目录（见下）
+                 ② resolve(process.env.KNOWLEDGE_DIR)（用 resolve() 解决相对路径问题）
+                 ③ 默认 join(__dirname, '..', 'OneFlower', 'OneFlower')
+   - 调用 await loadAndChunkDocuments(dir)（注意 loader 现在是 async 函数）
    - 调用 vectorstore.js 的 buildIndex 构建索引
-   - 返回 { success: true, count: 片段数量 }
+   - 返回 { success: true, count: 片段数量, dir: 实际使用的路径 }
 
-2. 修改 POST /api/chat，新增 ragEnabled 参数：
+2. 新增路由 GET /api/rag/list-folders：
+   - 接收 ?path= 参数，返回该目录下的子目录列表
+   - path 为空时列出 Windows 盘符（C:\、D:\ 等）
+   - 返回 { currentPath, parentPath, canGoUp, folders: [{name, path}] }
+
+3. 新增路由 POST /api/rag/set-knowledge-dir：
+   - 接收 { path } 参数，验证目录存在后设为当前知识库目录
+   - 返回 { success: true, path }
+
+4. 修改 POST /api/chat，新增 ragEnabled 参数：
    - 请求体改为 { messages, params, ragEnabled }
    - 当 ragEnabled=true 时：
      a. 取最后一条 user 消息作为查询
@@ -249,24 +273,34 @@ search(query, topK=3, rerankEnabled=false)：
 
 index.html / style.css：
 1. 在顶部工具栏添加「🔍 知识库模式」开关（toggle）
-2. 旁边添加「构建索引」按钮
-3. AI 消息下方，如果有 ragSources，显示可折叠的「参考来源」区域：
+2. 旁边添加 📁 选择目录 按钮 + "当前目录：（未设置）"标签
+3. 旁边添加「构建索引」按钮
+4. 添加目录浏览弹窗（Modal）：
+   - 显示当前路径 + 返回上级按钮
+   - 列出子目录（可单击进入）
+   - 底部有"确认选择"按钮
+5. AI 消息下方，如果有 ragSources，显示可折叠的「参考来源」区域：
    - 每条来源显示：文件名 + 相似度分数 + 前50字内容预览
    - 使用 details/summary 折叠组件
-4. [进阶] 添加「启用重排序」开关，标注「(进阶)」
+6. [进阶] 添加「启用重排序」开关，标注「(进阶)」
 
 app.js：
 1. 发送时，将 ragEnabled（开关状态）加入 POST body
 2. 解析 SSE 中 { type: "metadata" } 事件，提取 ragSources
 3. 在 AI 消息气泡下方渲染来源区域
 4. 构建索引按钮点击时，POST /api/rag/build-index，显示结果
+5. 📁 按钮打开目录浏览弹窗：
+   - 首次打开调用 GET /api/rag/list-folders 获取盘符列表
+   - 单击进入子目录，支持返回上级
+   - "确认选择"调用 POST /api/rag/set-knowledge-dir，更新当前目录标签
 ```
 
 ✅ **验证方式**：
 1. 点「构建索引」，显示「索引构建成功，共 X 个片段」
-2. 开启知识库模式，问「易速鲜花有哪些鲜花产品？」，回答引用文档内容
-3. 关闭知识库模式，同样问题，AI 说不确定
-4. 消息下方显示参考来源区域
+2. 📁 选择目录 能打开弹窗，选择后目录标签更新，重新构建索引成功
+3. 开启知识库模式，问「易速鲜花有哪些鲜花产品？」，回答引用文档内容
+4. 关闭知识库模式，同样问题，AI 说不确定
+5. 消息下方显示参考来源区域
 
 ---
 
