@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI 聊天助手</title>
+  <link rel="stylesheet" href="style.css">
+  <!-- marked.js: Markdown 渲染 -->
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <!-- highlight.js: 代码高亮 -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/styles/github-dark.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/core.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/languages/javascript.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/languages/python.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/languages/bash.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/languages/json.min.js"></script>
+</head>
+<body>
+  <div id="app">
+
+    <!-- ── 左侧参数面板（Phase 2）──────────────────────────────── -->
+    <aside id="settings-panel" class="collapsed">
+      <div class="settings-content">
+        <h3 class="settings-title">⚙️ 参数设置</h3>
+
+        <div class="setting-group">
+          <label>
+            🤖 模型
+            <select id="model-select">
+              <option value="deepseek-ai/DeepSeek-V3.2" selected>DeepSeek-V3.2（默认）</option>
+              <option value="Qwen/Qwen2.5-7B-Instruct">Qwen2.5-7B（永久免费）</option>
+              <option value="deepseek-ai/DeepSeek-R1">DeepSeek-R1（推理模型）</option>
+              <option value="Qwen/Qwen2.5-72B-Instruct">Qwen2.5-72B</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="setting-group">
+          <label>
+            🌡️ Temperature: <span class="param-value" id="temp-value">0.7</span>
+            <input type="range" id="temperature" min="0" max="2" step="0.1" value="0.7">
+          </label>
+          <small>越高越有创意，越低越确定；数学题建议 0</small>
+        </div>
+
+        <div class="setting-group">
+          <label>
+            🎯 Top-P: <span class="param-value" id="topp-value">0.9</span>
+            <input type="range" id="top-p" min="0" max="1" step="0.05" value="0.9">
+          </label>
+          <small>核采样阈值，与 Temperature 择一调整</small>
+        </div>
+
+        <div class="setting-group">
+          <label>
+            📏 Max Tokens
+            <input type="number" id="max-tokens" min="64" max="8192" value="1024">
+          </label>
+          <small>最大生成长度（1 token ≈ 1.5 汉字）</small>
+        </div>
+
+        <div class="setting-group">
+          <label>
+            🔁 重复惩罚: <span class="param-value" id="freq-value">0</span>
+            <input type="range" id="freq-penalty" min="-2" max="2" step="0.1" value="0">
+          </label>
+          <small>正值降低重复词汇出现频率</small>
+        </div>
+
+        <div class="setting-group">
+          <label>
+            ✨ 主题新鲜度: <span class="param-value" id="pres-value">0</span>
+            <input type="range" id="pres-penalty" min="-2" max="2" step="0.1" value="0">
+          </label>
+          <small>正值鼓励引入新话题</small>
+        </div>
+
+        <div class="setting-group">
+          <label>
+            📝 System Prompt
+            <textarea id="system-prompt" rows="4">你是一个友好的AI助手。</textarea>
+          </label>
+        </div>
+
+        <button id="reset-params" class="btn-secondary">↺ 恢复默认</button>
+      </div>
+    </aside>
+
+    <!-- ── 主聊天区域 ──────────────────────────────────────────── -->
+    <div id="main-content">
+
+      <!-- 顶部标题栏 -->
+      <header id="app-header">
+        <div class="header-left">
+          <button id="toggle-settings" title="展开/收起参数面板">⚙️</button>
+          <h1>🤖 AI 聊天助手</h1>
+        </div>
+        <div class="header-right">
+          <!-- Phase 3 控件 -->
+          <div class="ctrl-group" id="rag-controls">
+            <label class="toggle-label" title="开启后，AI 将先检索知识库再回答">
+              <input type="checkbox" id="rag-toggle">
+              <span class="toggle-switch"></span>
+              📚 知识库
+            </label>
+            <label class="toggle-label" title="开启后，使用重排序模型精排检索结果（进阶）" id="rerank-label">
+              <input type="checkbox" id="rerank-toggle">
+              <span class="toggle-switch"></span>
+              🔬 重排序
+            </label>
+            <button id="build-index-btn" class="btn-small" title="扫描知识库目录，生成向量索引">🏗️ 构建索引</button>
+          </div>
+          <button id="clear-btn" class="btn-small" title="清空当前对话">🗑️ 清空</button>
+        </div>
+      </header>
+
+      <!-- 消息区域 -->
+      <main id="chat-messages">
+        <!-- 欢迎消息 -->
+        <div class="message assistant welcome-msg">
+          <div class="message-content">
+            <p>你好！我是 AI 聊天助手，我可以：</p>
+            <ul>
+              <li>💬 回答各种问题（基础对话）</li>
+              <li>🌤️ <strong>查询天气</strong>：试试问"北京今天天气怎么样？"</li>
+              <li>📰 <strong>阅读新闻</strong>：试试问"今天科技新闻有什么？"</li>
+              <li>🔍 <strong>网络搜索</strong>：试试问"什么是量子计算？"</li>
+              <li>📚 <strong>知识库问答</strong>：开启顶部"知识库"开关</li>
+            </ul>
+            <p>在左侧 ⚙️ 面板可以调整 AI 的参数！</p>
+          </div>
+        </div>
+      </main>
+
+      <!-- Token 用量统计（Phase 1）-->
+      <div id="token-usage">
+        <span>📊 本次: 输入 <em id="prompt-tokens">—</em> | 输出 <em id="completion-tokens">—</em> tokens</span>
+        <span class="token-sep">｜</span>
+        <span>累计: <em id="total-tokens">0</em> tokens</span>
+      </div>
+
+      <!-- 输入区 -->
+      <footer id="input-area">
+        <textarea
+          id="user-input"
+          placeholder="输入你的问题… (Enter 发送，Shift+Enter 换行)"
+          rows="1"
+          autocomplete="off"
+        ></textarea>
+        <button id="send-btn" title="发送">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="22" y1="2" x2="11" y2="13"></line>
+            <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+          </svg>
+        </button>
+      </footer>
+
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

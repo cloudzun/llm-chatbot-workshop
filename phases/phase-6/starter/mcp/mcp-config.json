@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "rss-news": {
+      "command": "npx",
+      "args": ["-y", "feed-mcp@latest"],
+      "env": {}
+    }
+  }
+}
