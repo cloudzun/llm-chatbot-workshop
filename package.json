@@ -5,8 +5,9 @@
   "type": "module",
   "main": "server.js",
   "scripts": {
-    "start": "node solution/server.js",
-    "dev": "node --watch solution/server.js"
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "solution": "node solution/server.js"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.10.2",
