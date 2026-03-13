@@ -16,16 +16,16 @@ import { dirname, join } from 'path';
 
 config();
 
-import { loadAndChunkDocuments } from '../rag/loader.js';
-import { buildIndex, search } from '../rag/vectorstore.js';
-import { getWeather } from '../tools/weather.js';
-import { searchDuckDuckGo } from '../tools/search.js';
-import { getNews } from '../tools/news.js';
+import { loadAndChunkDocuments } from './rag/loader.js';
+import { buildIndex, search } from './rag/vectorstore.js';
+import { getWeather } from './tools/weather.js';
+import { searchDuckDuckGo } from './tools/search.js';
+import { getNews } from './tools/news.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const app = express();
 app.use(express.json({ limit: '2mb' }));
-app.use(express.static(join(__dirname, '../public')));
+app.use(express.static(join(__dirname, 'public')));
 
 // ─── 工具定义（Phase 4/5/6）─────────────────────────────────────────────────
 

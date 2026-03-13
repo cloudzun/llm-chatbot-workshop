@@ -22,7 +22,7 @@ const app = express();
 
 app.use(express.json());
 // 静态文件从项目根目录的 public/ 提供
-app.use(express.static(join(__dirname, '..', 'public')));
+app.use(express.static(join(__dirname, 'public')));
 
 /**
  * POST /api/chat

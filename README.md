@@ -70,51 +70,76 @@ node scripts/check-env.js
 ```
 aigc-chatbot/
 ├── .env.example            ← 从这里复制配置模板
-├── package.json            ← npm install / npm start（运行成品用）
+├── package.json            ← npm install / npm start / npm run dev
 │
-├── docs/                   ← 学习材料（重点在这里）
+├── phases/                 ← 核心：每个阶段的起点与完成参考
+│   ├── phase-1/
+│   │   ├── README.md              ← 本阶段说明与验收清单
+│   │   ├── starter/               ← 起点（Phase 1 从零开始，无 server.js）
+│   │   └── completed/server.js   ← 本阶段完成后的参考实现
+│   ├── phase-2/
+│   │   ├── README.md
+│   │   ├── starter/server.js      ← Phase 1 完成状态（起点）
+│   │   └── completed/server.js   ← Phase 2 完成后参考
+│   ├── phase-3/ … phase-6/        ← 同上，依次递进
+│
+├── public/                 ← 前端静态文件（HTML/CSS/JS）
+├── rag/                    ← RAG 模块（Phase 3 引入）
+├── tools/                  ← 工具函数：天气/新闻/搜索（Phase 4~6 引入）
+├── mcp/                    ← MCP 服务器配置（Phase 5 引入）
+├── OneFlower/              ← 示例知识库（易速鲜花）
+│
+├── solution/               ← Phase 6 完整成品（学完后对照 / 讲师演示用）
+│   └── server.js
+│
+├── docs/                   ← 学习材料
 │   ├── teaching/
-│   │   ├── student-textbook.md    ← 📖 主教材，学员从这里开始
-│   │   ├── instructor-guide.md   ← 讲师教案与带练要点
-│   │   └── prompt-templates.md   ← AI 提示词快速索引
+│   │   ├── student-textbook.md    ← 📖 主教材
+│   │   ├── instructor-guide.md
+│   │   └── prompt-templates.md
 │   └── engineering/
-│       ├── construction-manual.md ← 完整施工步骤（供参考）
-│       └── PRD.md                 ← 课程设计文档
+│       ├── construction-manual.md
+│       └── PRD.md
 │
-├── scripts/
-│   └── check-env.js        ← 环境检查脚本（第一步运行）
-│
-├── OneFlower/              ← 示例知识库（易速鲜花，Phase 3 RAG 使用）
-│
-├── reference/              ← 各阶段参考代码（卡壳时对照）
-│   ├── README.md
-│   ├── phase-1-server.js
-│   ├── phase-2-server.js
-│   ├── phase-3-server.js
-│   ├── phase-4-server.js
-│   └── phase-5-server.js
-│
-└── solution/               ← 完整成品（Phase 1~6 全量实现，学完后可对照）
-    ├── server.js
-    ├── public/             ← 前端（HTML/CSS/JS）
-    ├── rag/                ← RAG 模块
-    ├── tools/              ← 工具函数（天气/新闻/搜索）
-    └── mcp/                ← MCP 配置
+└── scripts/
+    └── check-env.js        ← 环境检查脚本
 ```
 
 ---
 
-## 参考资料与分阶段代码
+## 如何使用 phases/ 目录
 
-`reference/` 里保存了每个阶段结束时的标准答案。**遇到问题先自己思考，实在卡住再来这里对比逻辑。**
+每个阶段的 `phases/phase-N/` 包含两个子目录：
 
-> 课程的价值在于你亲手和 AI 协作生成代码的过程，而不是复制答案。
+| 子目录 | 内容 |
+|--------|------|
+| `starter/server.js` | 本阶段的**起点**（= 上一阶段完成后的状态） |
+| `completed/server.js` | 本阶段**完成后**的参考实现（标准答案） |
 
-`solution/` 是完整成品，对应最终 Phase 6，用 `npm start` 运行（在项目根目录）：
+**从任意阶段切入：**
 
 ```bash
-npm start
-# 打开浏览器访问 http://localhost:3000
+# 例如从 Phase 3 开始：
+cp phases/phase-3/starter/server.js server.js
+npm run dev
+```
+
+**卡壳时对照参考：**
+
+```bash
+# 对比你的代码与本阶段答案
+diff server.js phases/phase-3/completed/server.js
+```
+
+> `public/`、`rag/`、`tools/`、`mcp/` 已在根目录，直接可用。无需额外复制。
+
+---
+
+## 讲师演示成品
+
+```bash
+npm run solution
+# 打开 http://localhost:3000 — Phase 6 全量功能
 ```
 
 ---

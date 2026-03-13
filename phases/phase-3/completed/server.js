@@ -23,14 +23,14 @@ import { dirname, join } from 'path';
 config();
 
 // 使用项目根目录的 RAG 模块
-import { loadAndChunkDocuments } from '../rag/loader.js';
-import { buildIndex, search } from '../rag/vectorstore.js';
+import { loadAndChunkDocuments } from './rag/loader.js';
+import { buildIndex, search } from './rag/vectorstore.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const app = express();
 
 app.use(express.json({ limit: '2mb' }));
-app.use(express.static(join(__dirname, '..', 'public')));
+app.use(express.static(join(__dirname, 'public')));
 
 // ─── RAG 索引构建接口 ────────────────────────────────────────────────────────
 

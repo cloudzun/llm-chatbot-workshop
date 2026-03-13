@@ -1,13 +1,13 @@
 /**
- * Phase 2 参考代码 — 参数调优面板
+ * Phase 1 参考代码 — 基础聊天
  *
- * 在 Phase 1 基础上新增：
- *   ✅ POST /api/chat 接收 params 对象（model/temperature/top_p 等）
- *   ✅ 支持自定义 system prompt
- *   ✅ 所有参数有安全的默认值回退
+ * 功能：
+ *   ✅ Express 静态文件服务
+ *   ✅ POST /api/chat — 代理转发到 LLM，SSE 流式输出
+ *   ✅ 流结束后发送 token 用量数据
  *
- * 对应学员提示词模板：construction-manual.md → Phase 2
- * 下一阶段：phase-3-server.js 添加 RAG 知识问答
+ * 对应学员提示词模板：construction-manual.md → Phase 1
+ * 下一阶段：phase-2-server.js 添加参数调优面板
  */
 
 import express from 'express';
@@ -21,32 +21,19 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const app = express();
 
 app.use(express.json());
-app.use(express.static(join(__dirname, '..', 'public')));
+// 静态文件从项目根目录的 public/ 提供
+app.use(express.static(join(__dirname, 'public')));
 
 /**
  * POST /api/chat
- * 请求体: {
- *   messages: [{role, content}, ...],
- *   params: {
- *     model, temperature, top_p, max_tokens,
- *     frequency_penalty, presence_penalty, system_prompt
- *   }
- * }
+ * 请求体: { messages: [{role, content}, ...] }
+ * 响应:   SSE 流，转发 LLM 的内容 delta，
+ *         流结束后额外发送 {type: "usage", usage: {...}}
  */
 app.post('/api/chat', async (req, res) => {
-  const { messages, params = {} } = req.body;
+  const { messages } = req.body;
 
-  // 从 params 解构参数，均有默认值（与 .env 配置一致）
-  const {
-    model             = process.env.LLM_DEFAULT_MODEL,
-    temperature       = 0.7,
-    top_p             = 0.9,
-    max_tokens        = 1024,
-    frequency_penalty = 0,
-    presence_penalty  = 0,
-    system_prompt     = '你是一个友好的AI助手。'
-  } = params;
-
+  // 设置 SSE 响应头
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
@@ -59,19 +46,13 @@ app.post('/api/chat', async (req, res) => {
         'Authorization': `Bearer ${process.env.LLM_API_KEY}`
       },
       body: JSON.stringify({
-        model,
-        // 注意：滑块传来的是字符串，需要强制转为数字
-        temperature:       parseFloat(temperature),
-        top_p:             parseFloat(top_p),
-        max_tokens:        parseInt(max_tokens),
-        frequency_penalty: parseFloat(frequency_penalty),
-        presence_penalty:  parseFloat(presence_penalty),
+        model: process.env.LLM_DEFAULT_MODEL,
         messages: [
-          { role: 'system', content: system_prompt },
+          { role: 'system', content: '你是一个友好的AI助手。' },
           ...messages
         ],
         stream: true,
-        stream_options: { include_usage: true }
+        stream_options: { include_usage: true }  // 流结束时返回 usage
       })
     });
 
@@ -86,24 +67,30 @@ app.post('/api/chat', async (req, res) => {
     const decoder = new TextDecoder();
     let usageData = null;
 
+    // 逐块读取并透传给前端
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
 
       const rawChunk = decoder.decode(value, { stream: true });
 
+      // 从 chunk 中提取 usage 字段（LLM 通常在最后一条 data 中返回）
       for (const line of rawChunk.split('\n')) {
         if (line.startsWith('data: ') && line !== 'data: [DONE]') {
           try {
             const parsed = JSON.parse(line.slice(6));
             if (parsed.usage) usageData = parsed.usage;
-          } catch { /* ignore */ }
+          } catch {
+            // 解析失败忽略（非 JSON 行）
+          }
         }
       }
 
+      // 原样转发给前端
       res.write(rawChunk);
     }
 
+    // 流结束后，单独发送 token 用量统计
     if (usageData) {
       res.write(`data: ${JSON.stringify({ type: 'usage', usage: usageData })}\n\n`);
     }
@@ -118,6 +105,6 @@ app.post('/api/chat', async (req, res) => {
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`✅ Phase 2 — 参数调优面板已启动: http://localhost:${PORT}`);
+  console.log(`✅ Phase 1 — 基础聊天已启动: http://localhost:${PORT}`);
   console.log(`   模型: ${process.env.LLM_DEFAULT_MODEL}`);
 });

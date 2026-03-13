@@ -1,16 +1,19 @@
 /**
- * Phase 5 参考代码 — MCP 对接：新闻阅读
+ * Phase 4 参考代码 — Function Calling：天气查询
  *
- * 在 Phase 4 基础上新增：
- *   ✅ 工具列表中添加 get_news 工具
- *   ✅ toolHandlers 中添加 MCP 新闻工具处理器
+ * 在 Phase 3 基础上新增：
+ *   ✅ 工具定义：get_weather（JSON Schema 描述）
+ *   ✅ 流式"工具检测"模式：
+ *       - 第一次流式请求：检测是否有 tool_calls
+ *       - 若有 → 执行天气查询 → 第二次流式请求（附带工具结果）
+ *       - 若无 → 直接转发内容流（纯聊天路径）
+ *   ✅ 响应中发送 type:"metadata" 含工具调用信息（前端渲染天气卡片）
  *
  * 依赖模块（项目根目录下）：
- *   rag/loader.js, rag/vectorstore.js
- *   tools/weather.js, tools/news.js
+ *   rag/loader.js, rag/vectorstore.js, tools/weather.js
  *
- * 对应学员提示词模板：construction-manual.md → Phase 5
- * 下一阶段：项目根目录 server.js 添加 DuckDuckGo 搜索（Phase 6 完整版）
+ * 对应学员提示词模板：construction-manual.md → Phase 4
+ * 下一阶段：phase-5-server.js 添加 MCP 新闻工具
  */
 
 import express from 'express';
@@ -20,18 +23,17 @@ import { dirname, join } from 'path';
 
 config();
 
-import { loadAndChunkDocuments } from '../rag/loader.js';
-import { buildIndex, search } from '../rag/vectorstore.js';
-import { getWeather } from '../tools/weather.js';
-import { getNews } from '../tools/news.js';
+import { loadAndChunkDocuments } from './rag/loader.js';
+import { buildIndex, search } from './rag/vectorstore.js';
+import { getWeather } from './tools/weather.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const app = express();
 
 app.use(express.json({ limit: '2mb' }));
-app.use(express.static(join(__dirname, '..', 'public')));
+app.use(express.static(join(__dirname, 'public')));
 
-// ─── 工具定义（Phase 5：天气 + 新闻）───────────────────────────────────────
+// ─── 工具定义（Phase 4 只有天气）────────────────────────────────────────────
 
 const tools = [
   {
@@ -50,39 +52,16 @@ const tools = [
         required: ['city']
       }
     }
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'get_news',
-      description: '获取最新新闻资讯。当用户询问新闻、热点、最新消息、发生了什么时调用。',
-      parameters: {
-        type: 'object',
-        properties: {
-          topic: {
-            type: 'string',
-            description: '新闻主题，可选值：tech（科技）、general（综合）、finance（财经）、world（国际）'
-          }
-        },
-        required: ['topic']
-      }
-    }
   }
 ];
 
+// 工具名 → 执行函数 的映射
 const toolHandlers = {
   get_weather: async (args) => {
     try {
       return await getWeather(args.city);
     } catch (e) {
       return { error: `天气查询失败: ${e.message}` };
-    }
-  },
-  get_news: async (args) => {
-    try {
-      return await getNews(args.topic || 'general');
-    } catch (e) {
-      return { error: `新闻获取失败: ${e.message}` };
     }
   }
 };
@@ -174,7 +153,9 @@ app.post('/api/chat', async (req, res) => {
       'Authorization': `Bearer ${process.env.LLM_API_KEY}`
     };
 
-    // ── 流式工具检测 ─────────────────────────────────────────────────────
+    // ── Function Calling：流式检测工具调用 ──────────────────────────────
+    // 发送带工具定义的第一次请求（流式），
+    // 读取流时检测 delta.tool_calls。
     const firstResp = await fetch(`${process.env.LLM_BASE_URL}/chat/completions`, {
       method: 'POST',
       headers: llmHeaders,
@@ -197,9 +178,13 @@ app.post('/api/chat', async (req, res) => {
 
     const reader = firstResp.body.getReader();
     const decoder = new TextDecoder();
+
+    // 收集工具调用信息（index → {id, name, arguments}）
     const toolCallsMap = {};
     let hasToolCalls = false;
+    let contentStarted = false;
     let usageData = null;
+    const contentBuffer = [];  // 若无工具调用，缓存内容 chunk
 
     while (true) {
       const { done, value } = await reader.read();
@@ -218,8 +203,11 @@ app.post('/api/chat', async (req, res) => {
         if (data.usage) usageData = data.usage;
 
         const delta = data.choices?.[0]?.delta;
+        const finish = data.choices?.[0]?.finish_reason;
+
         if (!delta) continue;
 
+        // 检测工具调用
         if (delta.tool_calls) {
           hasToolCalls = true;
           for (const tc of delta.tool_calls) {
@@ -231,21 +219,38 @@ app.post('/api/chat', async (req, res) => {
           }
         }
 
+        // 普通内容（无工具调用时直接转发）
         if (delta.content && !hasToolCalls) {
-          res.write(`data: ${JSON.stringify(data)}\n\n`);
+          contentStarted = true;
+          res.write(`data: ${line.slice(6)}\n\n`);  // 直接转发原始 JSON 行内容
         }
+
+        // 实际上我们把整行转发，但要注意可能有工具调用
+        if (!hasToolCalls && delta.content) {
+          // 已在上面处理，避免重复写
+        }
+      }
+
+      // 如果本批次全是普通内容且未检测到工具调用，直接透传整个 rawChunk
+      if (!hasToolCalls && !lines.some(l => {
+        if (!l.startsWith('data: ') || l === 'data: [DONE]') return false;
+        try { return !!JSON.parse(l.slice(6)).choices?.[0]?.delta?.tool_calls; } catch { return false; }
+      })) {
+        // 已在逐行处理时透传，此处不再重复
       }
     }
 
+    // ── 无工具调用：已实时透传，收尾 ────────────────────────────────────
     if (!hasToolCalls) {
       if (usageData) sendEvent({ type: 'usage', usage: usageData });
       res.end();
       return;
     }
 
-    // ── 执行工具 ─────────────────────────────────────────────────────────
+    // ── 有工具调用：执行工具，发起第二次 LLM 请求 ───────────────────────
     const toolCallsList = Object.values(toolCallsMap);
 
+    // 发送工具调用元数据通知前端（用于渲染卡片）
     sendEvent({
       type: 'metadata',
       toolCalls: toolCallsList.map(tc => ({
@@ -254,6 +259,7 @@ app.post('/api/chat', async (req, res) => {
       }))
     });
 
+    // 执行工具
     const toolResults = [];
     for (const tc of toolCallsList) {
       const handler = toolHandlers[tc.name];
@@ -263,8 +269,8 @@ app.post('/api/chat', async (req, res) => {
       toolResults.push({ toolCallId: tc.id, name: tc.name, result });
     }
 
-    // ── 第二次 LLM 请求（流式，附带工具结果）───────────────────────────
-    const assistantMsg = {
+    // 构建第二次请求的消息列表
+    const assistantToolCallMsg = {
       role: 'assistant',
       tool_calls: toolCallsList.map(tc => ({
         id: tc.id,
@@ -273,18 +279,23 @@ app.post('/api/chat', async (req, res) => {
       }))
     };
 
-    const toolMsgs = toolResults.map(tr => ({
+    const toolResultMsgs = toolResults.map(tr => ({
       role: 'tool',
       tool_call_id: tr.toolCallId,
       content: JSON.stringify(tr.result)
     }));
 
+    // 第二次流式请求：将工具结果告知 LLM，让它生成最终回答
     const secondResp = await fetch(`${process.env.LLM_BASE_URL}/chat/completions`, {
       method: 'POST',
       headers: llmHeaders,
       body: JSON.stringify({
         ...baseRequest,
-        messages: [...builtMessages, assistantMsg, ...toolMsgs],
+        messages: [
+          ...builtMessages,
+          assistantToolCallMsg,
+          ...toolResultMsgs
+        ],
         stream: true,
         stream_options: { include_usage: true }
       })
@@ -329,5 +340,5 @@ app.post('/api/chat', async (req, res) => {
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`✅ Phase 5 — MCP 新闻工具已启动: http://localhost:${PORT}`);
+  console.log(`✅ Phase 4 — Function Calling（天气查询）已启动: http://localhost:${PORT}`);
 });
