@@ -1,0 +1,12 @@
+# 依赖
+node_modules/
+
+# 环境变量（含 API Key，不提交到版本控制）
+.env
+
+# 向量知识库索引（可由 /api/rag/build-index 随时重建）
+rag/vectorstore.json
+
+# 系统文件
+.DS_Store
+Thumbs.db
