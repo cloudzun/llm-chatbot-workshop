@@ -395,10 +395,12 @@ app.js：
    - 使用 MCP SDK 的 Client 和 StdioClientTransport
    - 连接到 feed-mcp（通过 npx 启动）
    - 调用工具获取 RSS 新闻（先用 list tools 查看 feed-mcp 暴露的工具名称）
-   - 根据 topic 参数选择 RSS 源：
-     * tech: https://hnrss.org/frontpage
-     * finance: https://feeds.finance.yahoo.com/rss/2.0/headline
-     * world, general: https://feeds.bbci.co.uk/news/world/rss.xml
+   - 根据 topic 参数选择 RSS 源（均可在国内访问）：
+     * tech: https://hnrss.org/frontpage（Hacker News 精选）
+     * finance: https://36kr.com/feed（36氪科技财经）
+     * world: https://rss.dw.com/xml/rss-zh-all（德国之声中文）
+     * general: https://www.oschina.net/news/rss（开源中国）
+   - 每次最多返回 10 条新闻（slice(0, 10)）
    - 返回新闻条目数组：[{ title, link, pubDate, summary }]
    - 添加备用方案：如果 MCP 连接失败，直接 fetch RSS XML 并用正则提取标题
 ```
@@ -432,6 +434,7 @@ app.js：
 - *feed-mcp 工具名不对*：在 getNews 函数里先打印 `await client.listTools()` 查看实际名称
 - *子进程权限报错*：在 mcp-config.json 中尝试用完整路径替代 `npx`
 - *RSS 源超时*：备用方案使用 `hnrss.org/frontpage`，通常最稳定
+- *BBC / Yahoo 源无法访问*：国内用户请使用代码内置的替换源（HN、OSChina、DW中文、36氪）
 
 ---
 
@@ -444,8 +447,11 @@ app.js：
 
 1. 创建 tools/search.js，实现并导出 searchDuckDuckGo(query) 函数：
    - 调用 https://api.duckduckgo.com/?q={encodeURIComponent(query)}&format=json&no_html=1&skip_disambig=1
+   - 中文查询时附加参数 kl=cn-zh（地区偏好）
    - 从响应中提取：Abstract、Heading、RelatedTopics（前5条的Text）、Answer、Definition
    - 过滤空字段，返回 { heading, abstract, answer, definition, relatedTopics } 对象
+   - 中文优化：若 DDG 无结果，改为返回必应/百度搜索链接列表（relatedTopics），
+     而不是空结果
 
 2. 修改 server.js，在工具列表中添加 search_web：
    - name: "search_web"  
@@ -475,7 +481,7 @@ app.js：
 
 🔧 **常见问题**：
 - *工具选择混乱*：检查各工具 description 是否有足够区分度，优化描述文字
-- *DuckDuckGo 返回空*：某些查询词 DDG 没有结果，换更通用的关键词测试
+- *DuckDuckGo 中文查询无结果*：已内置优化，无结果时自动返回必应/百度搜索链接；英文查询可尝试更通用的关键词
 - *多工具互相干扰*：确认 tools 数组中每个工具的 name 唯一
 
 ---

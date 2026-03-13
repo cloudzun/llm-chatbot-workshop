@@ -9,13 +9,14 @@
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 
-// ─── 预置 RSS 源 ──────────────────────────────────────────────
+// ─── 预置 RSS 源（均可在国内访问）──────────────────────────────
+// BBC 在国内被封锁，替换为可访问的替代源
 const RSS_FEEDS = {
-  tech:    'https://hnrss.org/newest?count=10',          // Hacker News (英文科技)
-  general: 'https://feeds.bbci.co.uk/news/rss.xml',     // BBC News
-  world:   'https://feeds.bbci.co.uk/news/world/rss.xml',
-  finance: 'https://feeds.bbci.co.uk/news/business/rss.xml',
-  default: 'https://hnrss.org/newest?count=10'
+  tech:    'https://hnrss.org/frontpage',               // Hacker News 精选（国内可访问）
+  general: 'https://www.oschina.net/news/rss',          // 开源中国
+  world:   'https://rss.dw.com/xml/rss-zh-all',         // 德国之声中文
+  finance: 'https://36kr.com/feed',                     // 36氪（科技创业财经）
+  default: 'https://hnrss.org/frontpage'
 };
 
 // MCP 客户端单例（懒初始化）
@@ -112,7 +113,7 @@ function parseRSSXML(xml) {
   const items = [];
   const itemMatches = [...xml.matchAll(/<item[^>]*>([\s\S]*?)<\/item>/gi)];
 
-  for (const match of itemMatches.slice(0, 8)) {
+  for (const match of itemMatches.slice(0, 10)) {
     const itemXml = match[1];
 
     const title = extractCDATA(itemXml, 'title');
