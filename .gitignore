@@ -5,7 +5,7 @@ node_modules/
 .env
 
 # 向量知识库索引（可由 /api/rag/build-index 随时重建）
-rag/vectorstore.json
+solution/rag/vectorstore.json
 
 # 系统文件
 .DS_Store
