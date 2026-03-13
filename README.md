@@ -32,7 +32,7 @@
 
 ```bash
 # 1. 克隆仓库
-git clone https://github.com/your-username/llm-chatbot-workshop.git
+git clone https://github.com/cloudzun/llm-chatbot-workshop.git
 cd llm-chatbot-workshop
 
 # 2. 安装依赖
