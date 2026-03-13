@@ -18,17 +18,17 @@
 | 目录 | 说明 |
 |------|------|
 | `starter/server.js` | Phase 2 完成状态 — 含参数面板，无 RAG |
-| `completed/server.js` | Phase 3 完成后的参考实现（需配合根目录 `rag/` 模块） |
+| `completed/` | Phase 3 完成后的参考实现（含 server.js + public/ + rag/） |
 
 ---
 
 ## 从这里开始
 
 ```bash
-# 将本阶段起点复制到项目根目录
-cp phases/phase-3/starter/server.js server.js
+# 将本阶段起点完整复制到项目根目录
+cp -r phases/phase-3/starter/* .
 
-# rag/ 模块已在根目录，直接启动
+# 启动开发模式
 npm run dev
 ```
 

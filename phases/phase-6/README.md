@@ -24,7 +24,7 @@
 ## 从这里开始
 
 ```bash
-cp phases/phase-6/starter/server.js server.js
+cp -r phases/phase-6/starter/* .
 npm run dev
 ```
 

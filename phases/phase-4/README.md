@@ -17,14 +17,14 @@
 | 目录 | 说明 |
 |------|------|
 | `starter/server.js` | Phase 3 完成状态 — 含 RAG，无工具调用 |
-| `completed/server.js` | Phase 4 完成后的参考实现（需配合根目录 `tools/weather.js`） |
+| `completed/` | Phase 4 完成后的参考实现（含 server.js + public/ + rag/ + tools/weather.js） |
 
 ---
 
 ## 从这里开始
 
 ```bash
-cp phases/phase-4/starter/server.js server.js
+cp -r phases/phase-4/starter/* .
 npm run dev
 ```
 

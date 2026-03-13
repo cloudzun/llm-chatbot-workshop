@@ -34,6 +34,15 @@ const buildIndexBtn   = document.getElementById('build-index-btn');
 const toggleSettings  = document.getElementById('toggle-settings');
 const settingsPanel   = document.getElementById('settings-panel');
 const resetParams     = document.getElementById('reset-params');
+const themeToggle     = document.getElementById('theme-toggle');
+const folderBrowserBtn = document.getElementById('folder-browser-btn');
+const folderModal     = document.getElementById('folder-modal');
+const folderClose     = document.getElementById('folder-close');
+const folderList      = document.getElementById('folder-list');
+const folderPathInput = document.getElementById('folder-path-input');
+const folderUpBtn     = document.getElementById('folder-up-btn');
+const folderSelectBtn = document.getElementById('folder-select-btn');
+const currentDirLabel = document.getElementById('current-dir-label');
 
 /* ── 状态 ─────────────────────────────────────────────────── */
 let conversationHistory = [];
@@ -102,6 +111,23 @@ toggleSettings?.addEventListener('click', () => {
   settingsPanel.classList.toggle('collapsed');
 });
 
+/* ── 深色 / 浅色主题 ─────────────────────────────────────── */
+(function initTheme() {
+  const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+  const saved = localStorage.getItem('theme');
+  applyTheme(saved === 'light' ? false : (saved === 'dark' ? true : prefersDark));
+})();
+
+function applyTheme(dark) {
+  document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+  if (themeToggle) themeToggle.textContent = dark ? '☀️' : '🌙';
+  localStorage.setItem('theme', dark ? 'dark' : 'light');
+}
+
+themeToggle?.addEventListener('click', () => {
+  applyTheme(document.documentElement.getAttribute('data-theme') !== 'dark');
+});
+
 /* ── RAG 控件 ─────────────────────────────────────────────── */
 buildIndexBtn?.addEventListener('click', async () => {
   buildIndexBtn.disabled = true;
@@ -124,6 +150,72 @@ buildIndexBtn?.addEventListener('click', async () => {
     buildIndexBtn.disabled = false;
     buildIndexBtn.textContent = '🏗️ 构建索引';
   }, 3000);
+});
+
+/* ── 文件夹浏览器（RAG 知识库目录选择）──────────────────────── */
+let _browsePath = '';
+
+async function _loadFolders(path) {
+  if (!folderList) return;
+  folderList.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-muted)">⏳ 加载中…</div>';
+  try {
+    const res = await fetch(`/api/rag/list-folders?path=${encodeURIComponent(path ?? '')}`);
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    _browsePath = data.currentPath;
+    if (folderPathInput) folderPathInput.value = data.currentPath || '（选择磁盘）';
+    if (folderUpBtn) { folderUpBtn.disabled = !data.canGoUp; folderUpBtn._parentPath = data.parentPath; }
+    folderList.innerHTML = '';
+    if (!data.folders.length) {
+      folderList.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-muted)">（此目录无子文件夹）</div>';
+      return;
+    }
+    for (const f of data.folders) {
+      const item = document.createElement('div');
+      item.className = 'folder-item';
+      item.textContent = '📁 ' + f.name;
+      item.title = f.path;
+      item.addEventListener('click', () => {
+        folderList.querySelectorAll('.folder-item').forEach(i => i.classList.remove('selected'));
+        item.classList.add('selected');
+        _browsePath = f.path;
+        if (folderPathInput) folderPathInput.value = f.path;
+      });
+      item.addEventListener('dblclick', () => _loadFolders(f.path));
+      folderList.appendChild(item);
+    }
+  } catch (e) {
+    folderList.innerHTML = `<div style="padding:20px;text-align:center;color:var(--accent-red)">❌ ${e.message}</div>`;
+  }
+}
+
+folderBrowserBtn?.addEventListener('click', () => {
+  if (!folderModal) return;
+  folderModal.style.display = 'flex';
+  _loadFolders('');
+});
+
+folderClose?.addEventListener('click', () => { if (folderModal) folderModal.style.display = 'none'; });
+folderModal?.addEventListener('click', e => { if (e.target === folderModal) folderModal.style.display = 'none'; });
+folderUpBtn?.addEventListener('click', () => _loadFolders(folderUpBtn._parentPath || ''));
+
+folderSelectBtn?.addEventListener('click', async () => {
+  if (!_browsePath) { appendSystemMsg('⚠️ 请先选择一个文件夹'); return; }
+  try {
+    const res = await fetch('/api/rag/set-knowledge-dir', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path: _browsePath })
+    });
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error);
+    if (folderModal) folderModal.style.display = 'none';
+    if (currentDirLabel) { currentDirLabel.textContent = _browsePath; currentDirLabel.title = _browsePath; }
+    appendSystemMsg(`✅ 知识库目录已设置为：${_browsePath}`);
+    if (buildIndexBtn) { buildIndexBtn.disabled = false; buildIndexBtn.textContent = '🏗️ 构建索引'; }
+  } catch (e) {
+    appendSystemMsg(`❌ 设置失败：${e.message}`);
+  }
 });
 
 /* ── 清空对话 ─────────────────────────────────────────────── */
@@ -229,6 +321,13 @@ async function handleSend() {
         if (data.type === 'usage') {
           updateTokens(data.usage);
           continue;
+        }
+
+        // ── 推理内容 delta（R1 / Thinking 模型）────────────────
+        const reasoningDelta = data.choices?.[0]?.delta?.reasoning_content;
+        if (reasoningDelta !== undefined && reasoningDelta !== null && reasoningDelta !== '') {
+          if (!thinkingRemoved) { removeThinking(contentEl); thinkingRemoved = true; }
+          updateReasoningBlock(wrapper, reasoningDelta);
         }
 
         // ── 内容 delta ───────────────────────────────────────
@@ -459,6 +558,22 @@ function renderRagSources(wrapper, sources) {
   block.appendChild(header);
   block.appendChild(body);
   wrapper.appendChild(block);
+}
+
+/* ── 推理过程展示（R1 / Thinking 模型）─────────────────────── */
+function updateReasoningBlock(wrapper, delta) {
+  let block = wrapper.querySelector('.reasoning-block');
+  if (!block) {
+    block = document.createElement('details');
+    block.className = 'reasoning-block';
+    block.innerHTML = `<summary class="reasoning-summary">🧠 思考过程</summary><pre class="reasoning-text"></pre>`;
+    const bubble = wrapper.querySelector('.message-content');
+    if (bubble) wrapper.insertBefore(block, bubble);
+    else wrapper.appendChild(block);
+  }
+  const pre = block.querySelector('.reasoning-text');
+  pre._buf = (pre._buf || '') + delta;
+  pre.textContent = pre._buf;
 }
 
 /* ── 安全辅助函数 ─────────────────────────────────────────── */

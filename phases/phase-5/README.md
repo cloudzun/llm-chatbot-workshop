@@ -17,14 +17,14 @@
 | 目录 | 说明 |
 |------|------|
 | `starter/server.js` | Phase 4 完成状态 — 含天气工具，无 MCP |
-| `completed/server.js` | Phase 5 完成后的参考实现（需配合根目录 `tools/news.js` 和 `mcp/`） |
+| `completed/` | Phase 5 完成后的参考实现（含 server.js + public/ + rag/ + tools/ + mcp/） |
 
 ---
 
 ## 从这里开始
 
 ```bash
-cp phases/phase-5/starter/server.js server.js
+cp -r phases/phase-5/starter/* .
 npm run dev
 ```
 

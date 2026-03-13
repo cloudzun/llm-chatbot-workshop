@@ -94,6 +94,7 @@
         <div class="header-left">
           <button id="toggle-settings" title="展开/收起参数面板">⚙️</button>
           <h1>🤖 AI 聊天助手</h1>
+          <button id="theme-toggle" class="btn-small" title="切换深色/浅色模式">☀️</button>
         </div>
         <div class="header-right">
           <!-- Phase 3 控件 -->
@@ -108,6 +109,8 @@
               <span class="toggle-switch"></span>
               🔬 重排序
             </label>
+            <button id="folder-browser-btn" class="btn-small" title="浏览文件系统，选择知识库目录">📁 选择目录</button>
+            <span id="current-dir-label" class="dir-label" title="">（未设置）</span>
             <button id="build-index-btn" class="btn-small" title="扫描知识库目录，生成向量索引">🏗️ 构建索引</button>
           </div>
           <button id="clear-btn" class="btn-small" title="清空当前对话">🗑️ 清空</button>
@@ -159,5 +162,23 @@
   </div>
 
   <script src="app.js"></script>
+
+  <!-- ── 文件夹浏览器弹窗 ──────────────────────────────────── -->
+  <div id="folder-modal" class="folder-modal-overlay" style="display:none">
+    <div class="folder-modal">
+      <div class="folder-modal-header">
+        <span>📁 选择知识库目录</span>
+        <button id="folder-close" class="btn-small">✕ 关闭</button>
+      </div>
+      <div class="folder-path-bar">
+        <button id="folder-up-btn" class="btn-small" disabled>⬆ 上级</button>
+        <input id="folder-path-input" type="text" readonly placeholder="选择目录…">
+      </div>
+      <div id="folder-list" class="folder-list"></div>
+      <div class="folder-modal-footer">
+        <button id="folder-select-btn" class="btn-small btn-primary">✅ 使用此目录</button>
+      </div>
+    </div>
+  </div>
 </body>
 </html>

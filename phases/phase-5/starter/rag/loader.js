@@ -1,42 +1,72 @@
 /**
  * rag/loader.js
- * 加载 oneflower 目录下所有文本/Markdown 文件，切分为语义片段（Chunk）
+ * 加载目录下所有支持格式的文档，切分为语义片段（Chunk）
+ * 支持格式：.txt .md .json .csv .docx .pdf
+ * 注意：.docx 需要 mammoth，.pdf 需要 pdf-parse（均为可选依赖，缺失时跳过对应文件）
  */
 
-import { readFileSync, readdirSync, statSync } from 'fs';
+import { readFile, readdir } from 'fs/promises';
 import { join, extname, basename } from 'path';
+import { createRequire } from 'module';
 
-const SUPPORTED_EXTENSIONS = new Set(['.txt', '.md', '.json', '.csv']);
+const _require = createRequire(import.meta.url);
+
+// 可选依赖：缺失时跳过对应格式文件，不影响其他格式
+let mammoth = null;
+let pdfParse = null;
+try { mammoth = _require('mammoth'); } catch {}
+try { pdfParse = _require('pdf-parse'); } catch {}
+
+const SUPPORTED_EXTENSIONS = new Set(['.txt', '.md', '.json', '.csv', '.docx', '.pdf']);
 
 /**
  * 加载目录下所有文档并切分
  * @param {string} dirPath  文档目录路径
  * @param {number} chunkSize  每个片段的目标字符数（默认 500）
  * @param {number} overlap    片段间重叠字符数（默认 100）
- * @returns {Array<{content:string, source:string, index:number}>}
+ * @returns {Promise<Array<{content:string, source:string, index:number}>>}
  */
-export function loadAndChunkDocuments(dirPath, chunkSize = 500, overlap = 100) {
+export async function loadAndChunkDocuments(dirPath, chunkSize = 500, overlap = 100) {
   let files;
   try {
-    files = readdirSync(dirPath).filter(f => {
-      const ext = extname(f).toLowerCase();
-      const fullPath = join(dirPath, f);
-      return SUPPORTED_EXTENSIONS.has(ext) && statSync(fullPath).isFile();
-    });
+    const entries = await readdir(dirPath, { withFileTypes: true });
+    files = entries
+      .filter(e => e.isFile() && SUPPORTED_EXTENSIONS.has(extname(e.name).toLowerCase()))
+      .map(e => e.name);
   } catch (e) {
     throw new Error(`无法读取目录 "${dirPath}": ${e.message}`);
   }
 
   if (files.length === 0) {
-    throw new Error(`目录 "${dirPath}" 中没有支持的文档文件（.txt/.md/.json/.csv）`);
+    throw new Error(`目录 "${dirPath}" 中没有支持的文档文件（.txt/.md/.json/.csv/.docx/.pdf）`);
   }
 
   const chunks = [];
   for (const file of files) {
     const filePath = join(dirPath, file);
-    let content;
+    const ext = extname(file).toLowerCase();
+    let content = '';
+
     try {
-      content = readFileSync(filePath, 'utf-8');
+      if (ext === '.pdf') {
+        if (!pdfParse) {
+          console.warn(`跳过 PDF "${file}"：请先运行 npm install pdf-parse`);
+          continue;
+        }
+        const buf = await readFile(filePath);
+        const result = await pdfParse(buf);
+        content = result.text;
+      } else if (ext === '.docx') {
+        if (!mammoth) {
+          console.warn(`跳过 DOCX "${file}"：请先运行 npm install mammoth`);
+          continue;
+        }
+        const buf = await readFile(filePath);
+        const result = await mammoth.extractRawText({ buffer: buf });
+        content = result.value;
+      } else {
+        content = await readFile(filePath, 'utf-8');
+      }
     } catch (e) {
       console.warn(`跳过文件 "${file}": ${e.message}`);
       continue;
@@ -44,11 +74,7 @@ export function loadAndChunkDocuments(dirPath, chunkSize = 500, overlap = 100) {
 
     const fileChunks = splitText(content, chunkSize, overlap);
     fileChunks.forEach((chunkContent, index) => {
-      chunks.push({
-        content: chunkContent,
-        source: basename(file),
-        index
-      });
+      chunks.push({ content: chunkContent, source: basename(file), index });
     });
   }
 

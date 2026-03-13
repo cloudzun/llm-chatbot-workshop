@@ -12,7 +12,8 @@
 import express from 'express';
 import { config } from 'dotenv';
 import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
+import { dirname, join, normalize, resolve } from 'path';
+import { readdir, stat, access } from 'fs/promises';
 
 config();
 
@@ -109,15 +110,60 @@ const toolHandlers = {
 
 // ─── RAG 索引构建接口（Phase 3）─────────────────────────────────────────────
 
+let currentKnowledgeDir = null;
+
 app.post('/api/rag/build-index', async (req, res) => {
-  const dir = process.env.KNOWLEDGE_DIR || './OneFlower/OneFlower';
+  const dir = currentKnowledgeDir
+    || (process.env.KNOWLEDGE_DIR ? resolve(process.env.KNOWLEDGE_DIR) : null)
+    || join(__dirname, '..', 'OneFlower', 'OneFlower');
   try {
-    const chunks = loadAndChunkDocuments(dir);
+    const chunks = await loadAndChunkDocuments(dir);
     if (chunks.length === 0) {
       return res.status(400).json({ error: `目录 "${dir}" 中未找到可读文档` });
     }
     await buildIndex(chunks);
     res.json({ success: true, count: chunks.length, dir });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ─── RAG 目录浏览接口 ────────────────────────────────────────────
+
+app.get('/api/rag/list-folders', async (req, res) => {
+  try {
+    const requestPath = req.query.path || '';
+    if (!requestPath) {
+      const drives = [];
+      for (let i = 65; i <= 90; i++) {
+        const drive = String.fromCharCode(i) + ':\\';
+        try { await stat(drive); drives.push(drive); } catch {}
+      }
+      return res.json({ currentPath: '', parentPath: '', canGoUp: false,
+        folders: drives.map(d => ({ name: d, path: d })) });
+    }
+    const normalizedPath = normalize(requestPath);
+    const entries = await readdir(normalizedPath, { withFileTypes: true });
+    const folders = entries
+      .filter(e => e.isDirectory() && !e.name.startsWith('.') && !e.name.startsWith('$'))
+      .map(e => ({ name: e.name, path: join(normalizedPath, e.name) }))
+      .sort((a, b) => a.name.localeCompare(b.name, 'zh'));
+    const parentPath = normalize(join(normalizedPath, '..'));
+    const isRoot = parentPath === normalizedPath;
+    res.json({ currentPath: normalizedPath, parentPath: isRoot ? '' : parentPath,
+      canGoUp: !isRoot, folders });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/rag/set-knowledge-dir', async (req, res) => {
+  try {
+    const { path: dirPath } = req.body;
+    if (!dirPath) return res.status(400).json({ error: '请提供路径' });
+    await access(dirPath);
+    currentKnowledgeDir = dirPath;
+    res.json({ success: true, path: dirPath });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

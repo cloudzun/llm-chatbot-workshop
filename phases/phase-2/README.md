@@ -22,8 +22,8 @@
 ## 从这里开始
 
 ```bash
-# 将本阶段起点复制到项目根目录
-cp phases/phase-2/starter/server.js server.js
+# 将本阶段起点完整复制到项目根目录
+cp -r phases/phase-2/starter/* .
 
 # 启动开发模式
 npm run dev
