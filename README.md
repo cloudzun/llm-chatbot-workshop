@@ -76,21 +76,26 @@ aigc-chatbot/
 │   ├── phase-1/
 │   │   ├── README.md              ← 本阶段说明与验收清单
 │   │   ├── starter/               ← 起点（Phase 1 从零开始，无 server.js）
-│   │   └── completed/server.js   ← 本阶段完成后的参考实现
+│   │   └── completed/             ← 本阶段完成后的参考（server.js + public/）
 │   ├── phase-2/
 │   │   ├── README.md
-│   │   ├── starter/server.js      ← Phase 1 完成状态（起点）
-│   │   └── completed/server.js   ← Phase 2 完成后参考
-│   ├── phase-3/ … phase-6/        ← 同上，依次递进
+│   │   ├── starter/               ← server.js + public/
+│   │   └── completed/             ← server.js + public/
+│   ├── phase-3/
+│   │   ├── starter/               ← server.js + public/
+│   │   └── completed/             ← server.js + public/ + rag/
+│   ├── phase-4/
+│   │   ├── starter/               ← server.js + public/ + rag/
+│   │   └── completed/             ← server.js + public/ + rag/ + tools/weather.js
+│   ├── phase-5/
+│   │   ├── starter/               ← + tools/weather.js
+│   │   └── completed/             ← + tools/news.js + mcp/
+│   └── phase-6/
+│       ├── starter/               ← server.js + public/ + rag/ + tools/ + mcp/
+│       └── completed/             ← 同上 + tools/search.js（完整）
 │
-├── public/                 ← 前端静态文件（HTML/CSS/JS）
-├── rag/                    ← RAG 模块（Phase 3 引入）
-├── tools/                  ← 工具函数：天气/新闻/搜索（Phase 4~6 引入）
-├── mcp/                    ← MCP 服务器配置（Phase 5 引入）
-├── OneFlower/              ← 示例知识库（易速鲜花）
-│
-├── solution/               ← Phase 6 完整成品（学完后对照 / 讲师演示用）
-│   └── server.js
+├── OneFlower/              ← 示例知识库（易速鲜花，RAG 使用）
+├── solution/server.js      ← Phase 6 成品（npm run solution 讲师演示用）
 │
 ├── docs/                   ← 学习材料
 │   ├── teaching/
@@ -109,29 +114,31 @@ aigc-chatbot/
 
 ## 如何使用 phases/ 目录
 
-每个阶段的 `phases/phase-N/` 包含两个子目录：
+每个阶段的 `phases/phase-N/` 都是**完全独立**的，包含该阶段所需的全部源文件：
 
 | 子目录 | 内容 |
 |--------|------|
-| `starter/server.js` | 本阶段的**起点**（= 上一阶段完成后的状态） |
-| `completed/server.js` | 本阶段**完成后**的参考实现（标准答案） |
+| `starter/` | 本阶段的**起点**（= 上一阶段完成后的完整状态） |
+| `completed/` | 本阶段**完成后**的参考实现（标准答案） |
 
-**从任意阶段切入：**
+**从任意阶段切入（以 Phase 3 为例）：**
 
 ```bash
-# 例如从 Phase 3 开始：
-cp phases/phase-3/starter/server.js server.js
+# 将本阶段起点的全部文件复制到项目根目录
+cp -r phases/phase-3/starter/* .
+
+# 启动开发模式（文件保存自动重启）
 npm run dev
 ```
 
 **卡壳时对照参考：**
 
 ```bash
-# 对比你的代码与本阶段答案
+# 对比你的 server.js 与本阶段标准答案
 diff server.js phases/phase-3/completed/server.js
 ```
 
-> `public/`、`rag/`、`tools/`、`mcp/` 已在根目录，直接可用。无需额外复制。
+> `node_modules/` 在项目根目录，只需 `npm install` 一次，无需重新安装。
 
 ---
 
