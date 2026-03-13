@@ -1,0 +1,9 @@
+streamlit>=1.35
+openai>=1.0
+numpy>=1.26
+pypdf>=4.0
+python-docx>=1.1
+requests>=2.31
+mcp>=1.0
+# Windows 用户若遇到 asyncio 事件循环嵌套问题，取消下行注释：
+# nest_asyncio>=1.6
